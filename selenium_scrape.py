@@ -7,12 +7,10 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import random
 
-# todo: Fix get_multiple_items() returning only 3 lists with one property each
 # todo: Rotate IPs
-# todo: configure Git
 
-
-# Done: Navigated to multiple pages
+# Done: Fixed get_multiple_items() returning only 3 lists with one property each
+# Done: Configured Git
 
 def get_listings(url = None):
     """ 
