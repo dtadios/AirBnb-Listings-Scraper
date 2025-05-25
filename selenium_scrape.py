@@ -22,25 +22,35 @@ def get_listings(url = None):
     url = "https://www.airbnb.com/s/tokyo/homes?refinement_paths%5B%5D=%2Fhomes&flexible_trip_lengths%5B%5D=one_week&monthly_start_date=2025-05-01&monthly_length=3&monthly_end_date=2025-08-01&price_filter_input_type=2&channel=EXPLORE&date_picker_type=calendar&source=structured_search_input_header&search_type=filter_change"
     driver.get(url)
     
-    WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH,'//button[@aria-label="Close"]'))).click() # wait until close is interactable
+    # Wait for and close the initial popup
+    WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH,'//button[@aria-label="Close"]'))).click()
     
     pages_html = []
     for i in range(3):
-        current_url = driver.current_url
-        driver.get(current_url)
-        html = driver.page_source  
-        soup = BeautifulSoup(html,'html.parser')
-        one_page_html = soup.find_all("div",{"itemprop" : "itemListElement"}) # gets html of one page
+        # Wait for listings to be present on the page
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div[itemprop="itemListElement"]'))
+        )
+        
+        # Add a small delay to ensure all dynamic content is loaded
+        time.sleep(3)
+        
+        html = driver.page_source
+        soup = BeautifulSoup(html, 'html.parser')
+        one_page_html = soup.find_all("div", {"itemprop": "itemListElement"})
         pages_html.append(one_page_html)
-        sleep_time = random.uniform(5,10)
-        time.sleep(sleep_time)
-
-        WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH,'//a[@aria-label="Next"]'))).click()    # wait until next is interactable
+        
+        # Don't click next on the last iteration
+        if i < 2:
+            next_button = WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable((By.XPATH, '//a[@aria-label="Next"]'))
+            )
+            next_button.click()
+            
+            # Wait for the URL to change and page to start loading
+            time.sleep(random.uniform(5, 10))
 
     driver.quit()
-    # for i in range(len(pages_html)):
-    #     print(f"Page{i}__________________________________________________")
-    #     print(pages_html[i])
     return pages_html
 
 def get_items(property_list: list):
@@ -48,30 +58,31 @@ def get_items(property_list: list):
     Input: One page of html
     Returns: List of dictionaries containing each properties's details
     """
-    l = []
-    o = {}
+
+    properties = []
     
-    for i in range(0,len(property_list)): # rewrite to iterate through pages_html
-        try:
-            o["property-title"]=property_list[i].find('div',{'data-testid':'listing-card-title'}).text.lstrip().rstrip()
-        except:
-            o["property-title"]=None
-        try:
-            o["rating"]=property_list[i].find('div',{'class':'t1a9j9y7'}).text.split()[0]
-        except:
-            o["rating"]=None
-        try:
-            o["price"]=property_list[i].find('span',{"class":"umg93v9 atm_7l_rb934l atm_cs_1peztlj atm_rd_14k51in atm_cs_kyjlp1__1v156lz dir dir-ltr"}).text.lstrip().rstrip().split()[0]
-        except:
-            o["price"]=None
-        try:
-            o["cut-price"]=property_list[i].find('span',{'class':'umuerxh atm_7l_dezgoh atm_rd_us8791 atm_cs_1529pqs__oggzyc atm_cs_kyjlp1__1v156lz dir dir-ltr'}).text.lstrip().rstrip().split()[0]
-        except:
-            o["cut-price"]=None
-        l.append(o)
-        o={}
+    for property_item in property_list:
+        property_data = {}
         
-    return l
+        # Extract property title
+        title_elem = property_item.find('div', {'data-testid': 'listing-card-title'})
+        property_data["property-title"] = title_elem.text.strip() if title_elem else None
+        
+        # Extract rating - using a more general selector
+        rating_elem = property_item.find('span', {'class': lambda x: x and 'r1dxllyb' in x})
+        property_data["rating"] = rating_elem.text.split()[0] if rating_elem else None
+        
+        # Extract current price - using a more general selector
+        price_elem = property_item.find('span', {'class': lambda x: x and 'a8jt5op' in x})
+        property_data["price"] = price_elem.text.strip().split()[0] if price_elem else None
+        
+        # Extract original price (if discounted) - using a more general selector
+        cut_price_elem = property_item.find('span', {'class': lambda x: x and 'umuerxh' in x})
+        property_data["cut-price"] = cut_price_elem.text.strip().split()[0] if cut_price_elem else None
+        
+        properties.append(property_data)
+    
+    return properties
 
 def get_multiple_items(pages_html: list):
     for page in pages_html:
